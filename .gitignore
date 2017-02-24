@@ -1,0 +1,17 @@
+
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+.svn
+*.tmp
+*.exe
+*.rar
+*.ini
+*.mp3
+*.mp4
+*.avi
+.DS_Store
+node_modules
+
