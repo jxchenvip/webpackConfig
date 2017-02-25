@@ -13,10 +13,8 @@ var path = require('path');
 var fs = require('fs');
 var autoprefixer = require('autoprefixer-loader');
 var ncp = require("copy-paste"); // 复制，粘贴
-var rootdir = path.join(__dirname, 'src');
 var childProcess = require('child_process');
 var ExtractTextPlugin = require("extract-text-webpack-plugin");
-var minify = require('html-minifier').minify;
 var HtmlWebpackPlugin = require('html-webpack-plugin');
 var pkg = require('./package.json');
 var cwd = process.cwd();
@@ -41,7 +39,8 @@ var argvs = process.argv.reduce(function(o, key, index, arr) {
 var sls = {
     deep: argvs.boss, // 是否压缩文件夹下所有文件（包含文件夹内的文件夹）
     entry: {}, // 入口文件处理
-    output: path.join(cwd, 'app/dist') // 输出路径branches
+    root:  path.join(__dirname),
+    output: path.join(process.cwd(), 'dist') // 输出路径branches
 };
 
 (function() {
@@ -85,7 +84,7 @@ var sls = {
 // 入口处理
 (function() {
     var files = {};
-    var cwd = path.join(process.cwd(), '/app/src/');
+    var cwd = path.join(process.cwd(), 'src' + path.sep + 'js');
 
     function readdir(p, deep = false) {
         fs.readdirSync(p).forEach(function(sPath) {
@@ -93,16 +92,15 @@ var sls = {
             if (fs.lstatSync(fileName).isDirectory() && sPath != '') {
                 if (deep) readdir(fileName, deep);
             } else {
-                // if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath) && /\.js$/.test(sPath)) {
-                if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath)) {
+                if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath) && /\.js$/.test(sPath)) {
+                    // if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath)) {
                     var name = path.relative(cwd, fileName);
                     files[name.replace(/\.js$/, '')] = fileName;
                 }
             }
         })
     };
-    readdir(cwd, sls.deep);
-    console.log(files);
+    readdir(cwd, false);
     sls.entry = files;
 })();
 
@@ -131,7 +129,7 @@ module.exports = {
             //.scss 文件使用 style-loader、css-loader 和 sass-loader 来编译处理
             { test: /\.scss$/, loader: 'style!css!sass?sourceMap' },
             //图片文件使用 url-loader 来处理，小于8kb的直接转为base64
-            { test: /\.(png|jpg)$/, loader: 'url-loader?limit=8192&name=./images/[name].[ext]' }
+            { test: /\.(png|jpg)$/, loader: 'url-loader?limit=8192&name=images/[name].[ext]' }
         ]
     },
     // stylusOther: {
@@ -143,7 +141,7 @@ module.exports = {
     },
     resolve: {
         //查找module的话从这里开始查找
-        root: rootdir,
+        root: sls.root,
         //自动扩展文件后缀名，意味着我们require模块可以省略不写后缀名
         extensions: ['', '.js', '.json', '.scss', '.styl', '.jade'],
         //模块别名定义，方便后续直接引用别名，无须多写长长的地址
@@ -178,10 +176,11 @@ Object.keys(module.exports.entry).forEach(function(page) {
             // chunks: 允许只添加某些块 (比如，仅仅 unit test 块)
             // chunksSortMode: 允许控制块在添加到页面之前的排序方式，支持的值：'none' | 'default' | {function}-default:'auto'
             // excludeChunks: 允许跳过某些块，(比如，跳过单元测试的块) 
+            inject: 'body',
             title: page,
             filename: page + '.html',
             minify: false,
-            template: './app/src/jade/' + page + '.jade',
+            template: path.join(process.cwd(), 'src') + path.sep + page + '.jade',
             chunks: [page]
         }));
     }
