@@ -1,9 +1,8 @@
 html(lang="en")
   head
+    meta(charset="utf-8")
     title= pageTitle
   body
-    .header header
-    .footer footer
     h1 Jade - node template engine
     #container.col.class1.class2
       p You are amazing
@@ -12,4 +11,5 @@ html(lang="en")
         templating language with a
         strong focus on performance
         and powerful features.
-
+    include _header
+    include _footer

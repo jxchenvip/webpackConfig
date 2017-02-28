@@ -8,12 +8,15 @@
 // webpack --config webpack.min.js
 // webpack --display-error-details
 // 前面的四个命令比较基础，使用频率会比较大，后面的命令主要是用来定位打包时间较长的原因，方便改进配置文件，提高打包效率。
+
+
 var webpack = require('webpack');
 var path = require('path');
 var fs = require('fs');
 var autoprefixer = require('autoprefixer-loader');
 var ncp = require("copy-paste"); // 复制，粘贴
 var childProcess = require('child_process');
+var minify = require('html-minifier').minify;
 var ExtractTextPlugin = require("extract-text-webpack-plugin");
 var HtmlWebpackPlugin = require('html-webpack-plugin');
 var pkg = require('./package.json');
@@ -39,8 +42,10 @@ var argvs = process.argv.reduce(function(o, key, index, arr) {
 var sls = {
     deep: argvs.boss, // 是否压缩文件夹下所有文件（包含文件夹内的文件夹）
     entry: {}, // 入口文件处理
-    root:  path.join(__dirname),
-    output: path.join(process.cwd(), 'dist') // 输出路径branches
+    root: path.join(__dirname),
+    template: {}, // jade模板
+    styles: {}, // 样式
+    output: cwd.replace('src', 'dist') // 输出路径branches
 };
 
 (function() {
@@ -83,8 +88,12 @@ var sls = {
 
 // 入口处理
 (function() {
-    var files = {};
-    var cwd = path.join(process.cwd(), 'src' + path.sep + 'js');
+    var jsfiles = {};
+    var jades = {};
+    var styls = {};
+    var cwd = path.join(process.cwd());
+    var REG_JADE = /\.jade$/;
+    var REG_JS = /\.js$/;
 
     function readdir(p, deep = false) {
         fs.readdirSync(p).forEach(function(sPath) {
@@ -92,25 +101,34 @@ var sls = {
             if (fs.lstatSync(fileName).isDirectory() && sPath != '') {
                 if (deep) readdir(fileName, deep);
             } else {
-                if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath) && /\.js$/.test(sPath)) {
-                    // if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath)) {
+                // if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath) && /\.js$/.test(sPath)) {
+                if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath)) {
                     var name = path.relative(cwd, fileName);
-                    files[name.replace(/\.js$/, '')] = fileName;
+                    // js
+                    if (REG_JS.test(name)) {
+                        jsfiles[name.replace(REG_JS, '')] = fileName;
+                    }
+
+                    // jade
+                    if (REG_JADE.test(name)) {
+                        jades[name.replace(REG_JADE, '')] = fileName;
+                    }
                 }
             }
         })
     };
-    readdir(cwd, false);
-    sls.entry = files;
+    readdir(cwd, true);
+    sls.entry = jsfiles;
+    sls.template = jades;
 })();
-
-
+console.log(sls.entry)
 module.exports = {
     //支持数组形式，将加载数组中的所有模块，但以最后一个模块作为输出
     entry: sls.entry,
     output: {
+        publicPath: '../',
         path: sls.output, // tags: 源码环境 branches: 测试环境 trunk: 正式环境
-        filename: "js/[name].js",
+        filename: "[name].js",
         libraryTarget: "umd"
     },
     module: {
@@ -125,16 +143,15 @@ module.exports = {
             // { test: /\.html$/, loader: "html" },
             //.css 文件使用 style-loader 和 css-loader 来处理
             { test: /\.styl$/, loader: ExtractTextPlugin.extract(["css", "autoprefixer-loader?browsers=last 9 version", "stylus"]) },
+            // { test: /\.styl$/, loader: "style-loader!css-loader!stylus-loader" },
             { test: /\.css$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader") },
             //.scss 文件使用 style-loader、css-loader 和 sass-loader 来编译处理
             { test: /\.scss$/, loader: 'style!css!sass?sourceMap' },
             //图片文件使用 url-loader 来处理，小于8kb的直接转为base64
-            { test: /\.(png|jpg)$/, loader: 'url-loader?limit=8192&name=images/[name].[ext]' }
+            { test: /\.(png|jpg)$/, loader: 'file-loader?name=[path][name].[ext]' },
+            // { test: /\.(png|jpg)$/, loader: 'url-loader?limit=8192&name=[path][name].[ext]' }
         ]
     },
-    // stylusOther: {
-    //     use: [autoprefixer]
-    // },
     externals: {
         // jquery: 'jQuery',
         zepto: '$',
@@ -154,14 +171,15 @@ module.exports = {
             },
             output: {
                 comments: false,
-            },
+                ascii_only: true
+            }
         }),
         new ExtractTextPlugin("css/style.css")
     ]
 }
 
 // 打包jade页面
-Object.keys(module.exports.entry).forEach(function(page) {
+Object.keys(sls.template).forEach(function(page) {
     if (page !== 'vendors') {
         module.exports.plugins.push(new HtmlWebpackPlugin({
             // title: 用来生成页面的 title 元素
@@ -176,11 +194,10 @@ Object.keys(module.exports.entry).forEach(function(page) {
             // chunks: 允许只添加某些块 (比如，仅仅 unit test 块)
             // chunksSortMode: 允许控制块在添加到页面之前的排序方式，支持的值：'none' | 'default' | {function}-default:'auto'
             // excludeChunks: 允许跳过某些块，(比如，跳过单元测试的块) 
-            inject: 'body',
             title: page,
             filename: page + '.html',
             minify: false,
-            template: path.join(process.cwd(), 'src') + path.sep + page + '.jade',
+            template: page + '.jade',
             chunks: [page]
         }));
     }
