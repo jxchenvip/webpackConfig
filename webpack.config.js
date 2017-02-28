@@ -194,7 +194,7 @@ Object.keys(sls.template).forEach(function(page) {
             // chunks: 允许只添加某些块 (比如，仅仅 unit test 块)
             // chunksSortMode: 允许控制块在添加到页面之前的排序方式，支持的值：'none' | 'default' | {function}-default:'auto'
             // excludeChunks: 允许跳过某些块，(比如，跳过单元测试的块) 
-            title: page,
+            title: 'AAAAAAAAAAAA',
             filename: page + '.html',
             minify: false,
             template: page + '.jade',
