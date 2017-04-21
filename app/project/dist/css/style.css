@@ -1,2 +1,2 @@
-body{background:#ccc;color:#000;font-size:20px;padding:100px}.footer{background-image:url(../images/a.png)}.header{background-image:url(../images/b.jpg)}
+body{background:#ccc;color:#000;font-size:20px;padding:100px}.footer{background-position:0 0}.footer,.header{background-image:url(../img/sprite.__.png);background-size:210% 100%}.header{background-position:100% 0}
 /*# sourceMappingURL=style.css.map*/

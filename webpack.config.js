@@ -276,7 +276,7 @@ webpack -move-path 压缩到指定文件路径不可与trunk同时使用
         if (page !== 'vendors') {
             webpackOptions.plugins.unshift(new HtmlWebpackPlugin({
                 title: page,
-                inject: true,
+                inject: false,
                 filename: page + '.html',
                 template: path.join(cwd, page + '.pug')
             }));

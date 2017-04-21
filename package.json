@@ -33,6 +33,7 @@
     "postcss-sprites": "^4.2.0",
     "precss": "^1.4.0",
     "pug": "^2.0.0-beta11",
+    "pug-loader": "^2.3.0",
     "rev-hash": "^1.0.0",
     "spritesmith": "^3.1.0",
     "style-loader": "^0.14.1",
