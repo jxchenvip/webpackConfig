@@ -3,54 +3,13 @@ html(lang="en")
     meta(charset="utf-8")
     title= pageTitle
     link(rel="stylesheet",href="../css/style.css")
+    
   body
+    include _mixins
     include _header
     #container
-        #box
-            .title title
-            .bd.
-                this is body
-                ul
-                    li
-
-            .ft.
-                this is foot
-        #box
-        mixin a(str, link)
-            a(href=link ? link : "javascript")= str
-
-        mixin list
-            ul
-                li foo
-                    a(href="javascript:;") biadu.com
-                    a(href="javascript:;") biadu.com
-                    a(href="javascript:;") biadu.com
-                    a(href="javascript:;") biadu.com
-                    a(href="javascript:;") biadu.com
-                    a(href="javascript:;") biadu.com
-                li bar
-                    a(href="javascript:;") biadu.com
-                li aaa
-                    a(href="javascript:;") biadu.com
-                    p
-                        | aaaaaaaaaaaaaaaaaa
-                        | aaaaaaaaaaaaaaaaaa
-                        | aaaaaaaaaaaaaaaaaa
-                        | aaaaaaaaaaaaaaaaaa
-                        | aaaaaaaaaaaaaaaaaa
-                    p.
-                        dsfsdfsdfsdfsdfsdfsd#[em ememememememememememem]sdfdsfdsfsd#[strong strongstrongstrongstrongstrong]dsfdsfdsfds
-        +list
-        +list
-        +list
-        +list
-        +list
-
-        +a("aaaaaaaaaaaaaaaaaaa")
-        +a("aaaaaaaaaaaaaaaaaaa")
-        +a("aaaaaaaaaaaaaaaaaaa")
-        +a("aaaaaaaaaaaaaaaaaaa")
-        +a("aaaaaaaaaaaaaaaaaaa")
-        +a("aaaaaaaaaaaaaaaaaaa")
-
+        p
+            +a("http://baidu.com")
+        span dsfdsfds
+        p sdfdsf
     include _footer

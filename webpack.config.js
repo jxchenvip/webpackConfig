@@ -1,81 +1,297 @@
-// webpack 最基本的启动webpack命令
-// webpack -w 提供watch方法，实时进行打包更新
-// webpack -p 对打包后的文件进行压缩
-// webpack -d 提供SourceMaps，方便调试
-// webpack --colors 输出结果带彩色，比如：会用红色显示耗时较长的步骤
-// webpack --profile 输出性能数据，可以看到每一步的耗时
-// webpack --display- modules 默认情况下 node_modules 下的模块会被隐藏，加上这个参数可以显示这些被隐藏的模块
-// webpack --config webpack.min.js
-// webpack --display-error-details
-// 前面的四个命令比较基础，使用频率会比较大，后面的命令主要是用来定位打包时间较长的原因，方便改进配置文件，提高打包效率。
+const fs = require('fs');
+const ncp = require("copy-paste"); // 复制，粘贴
+const path = require('path');
+const argv = require('yargs').argv; // 传入参数
+const webpack = require('webpack');
+const childProcess = require('child_process');
+
+// postcss-sprite modules
+const postcss = require('postcss');
+const updateRule = require('postcss-sprites/lib/core').updateRule;
+const postcssSprites = require('postcss-sprites');
+const autoprefixer = require('autoprefixer');
+const spritesmith = require('spritesmith');
+const cssnano = require('cssnano');
+const precss = require('precss');
+
+// const FriendlyErrorsWebpackPlugin = require('friendly-errors-webpack-plugin');
+const FastUglifyJsPlugin = require('fast-uglifyjs-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const ExtractTextPlugin = require('extract-text-webpack-plugin'); // 提取css
+const UglifyJSPlugin = require('uglifyjs-webpack-plugin'); // 压缩js
 
 
-var webpack = require('webpack');
-var path = require('path');
-var fs = require('fs');
-var autoprefixer = require('autoprefixer-loader');
-var ncp = require("copy-paste"); // 复制，粘贴
-var childProcess = require('child_process');
-var minify = require('html-minifier').minify;
-var ExtractTextPlugin = require("extract-text-webpack-plugin");
-var HtmlWebpackPlugin = require('html-webpack-plugin');
-var pkg = require('./package.json');
-var cwd = process.cwd();
-// 处理参数
-var argvs = process.argv.reduce(function(o, key, index, arr) {
-    if (key.charAt(0) == '-') {
-        o[key.substr(1)] = key;
+const readFileName = ',';
+const cwd = process.cwd();
+
+let webpackOptions = {
+    context: path.resolve(cwd),
+    entry: {},
+    output: {
+        filename: '[name].js',
+        path: '',
+        libraryTarget: "umd"
+    },
+    node: {
+        Buffer: false
+    },
+    module: {
+        rules: [{
+            test: /\.pug$/,
+            use: [{
+                loader: 'pug-loader?pretty=true'
+            }]
+        }, {
+            test: /\.js$/,
+            exclude: /(node_modules|bower_components)/,
+            use: [{
+                loader: 'babel-loader?presets[]=es2015'
+            }]
+        }, {
+            test: /\.less$/,
+            use: ExtractTextPlugin.extract({
+                fallback: 'style-loader',
+                use: ['css-loader', 'postcss-loader', 'less-loader']
+            })
+        }, {
+            test: /\.styl$/,
+            use: ExtractTextPlugin.extract({
+                fallback: 'style-loader',
+                use: ['css-loader', 'postcss-loader', 'stylus-loader']
+            })
+        }, {
+            test: /\.css$/,
+            use: ExtractTextPlugin.extract({
+                fallback: "style-loader",
+                use: ['css-loader?importLoaders=1', 'postcss-loader']
+            })
+        }, {
+            test: /\.(jpg|png|gif)$/,
+            use: ['file-loader?name=[path][name].[ext]&publicPath=../&outputPath=./', {
+                loader: 'image-webpack-loader',
+                options: {
+                    query: {
+                        progressive: true,
+                        optimizationLevel: 7,
+                        interlaced: false,
+                        pngquant: {
+                            quality: '65-90',
+                            speed: 4
+                        }
+                    }
+                }
+            }]
+        }, {
+            test: /\.(woff|woff2|eot|ttf|svg)$/,
+            use: [{
+                loader: 'url-loader?name=[path][name].[ext]&publicPath=../&outputPath=./',
+                options: {
+                    limit: 100000
+                }
+            }]
+        }]
+    },
+    resolve: {
+        modules: [
+            "node_modules"
+        ],
+        extensions: [".js", ".json", ".css", ".jade", "pug", "styl", ".less"]
+    },
+    plugins: [
+        new webpack.LoaderOptionsPlugin({
+            minimize: true,
+            options: {
+                context: cwd,
+                postcss: function(css) {
+                    return [
+                        precss,
+                        postcssSprites({
+                            retina: true, //支持retina，可以实现合并不同比例图片
+                            verbose: true,
+                            spritesmith: {
+                                padding: 10
+                            },
+                            spritePath: 'img/', //雪碧图合并后存放地址
+                            stylesheetPath: 'css/',
+                            basePath: getOutPutPath(),
+                            hooks: {
+                                onUpdateRule: function(rule, token, image) {
+                                    var backgroundSizeX = (image.spriteWidth / image.coords.width) * 100;
+                                    var backgroundSizeY = (image.spriteHeight / image.coords.height) * 100;
+                                    var backgroundPositionX = (image.coords.x / (image.spriteWidth - image.coords.width)) * 100;
+                                    var backgroundPositionY = (image.coords.y / (image.spriteHeight - image.coords.height)) * 100;
+
+                                    backgroundSizeX = isNaN(backgroundSizeX) ? 0 : backgroundSizeX;
+                                    backgroundSizeY = isNaN(backgroundSizeY) ? 0 : backgroundSizeY;
+                                    backgroundPositionX = isNaN(backgroundPositionX) ? 0 : backgroundPositionX;
+                                    backgroundPositionY = isNaN(backgroundPositionY) ? 0 : backgroundPositionY;
+
+                                    var backgroundImage = postcss.decl({
+                                        prop: 'background-image',
+                                        value: 'url(' + image.spriteUrl + ')'
+                                    });
+
+                                    var backgroundSize = postcss.decl({
+                                        prop: 'background-size',
+                                        value: backgroundSizeX + '% ' + backgroundSizeY + '%'
+                                    });
+
+                                    var backgroundPosition = postcss.decl({
+                                        prop: 'background-position',
+                                        value: backgroundPositionX + '% ' + backgroundPositionY + '%'
+                                    });
+
+                                    rule.insertAfter(token, backgroundImage);
+                                    rule.insertAfter(backgroundImage, backgroundPosition);
+                                    rule.insertAfter(backgroundPosition, backgroundSize);
+                                }
+                            },
+                            groupBy: function(image) {
+                                var dirname = path.dirname(image.originalUrl),
+                                    outputname = dirname.split('/').slice(2).join('.') || '__';
+                                return Promise.resolve(outputname);
+                            },
+                            filterBy: function(image) {
+                                var basename = path.basename(image.url);
+                                if (/^_/.test(basename) || !/\.png$/.test(image.url))
+                                    return Promise.reject();
+                                return Promise.resolve();
+                            }
+                        }),
+                        autoprefixer({
+                            browsers: ['ie>=8', '>1% in CN']
+                        }),
+                        cssnano({
+                            zindex: false
+                        })
+                    ];
+                }
+            }
+        }),
+        // new FriendlyErrorsWebpackPlugin(),
+        new UglifyJSPlugin({
+            sourceMap: true,
+            compress: {
+                warnings: true
+            }
+        }),
+        new ExtractTextPlugin({
+            filename: (getPath) => {
+                return getPath('css/[name].css').replace('css/js', 'css');
+            },
+            // filename: "css/bundle.css",
+            disable: false, // 禁用插件
+            allChunks: true // 向所有额外的 chunk 提取（默认只提取初始加载模块）,
+        })
+    ]
+}
+
+/**********************************************************
+如果执行为最外层webpack.config.js退出进程
+***********************************************************/
+{
+    if (cwd === __dirname) {
+        process.exit();
     }
-    return o;
-}, {});
+}
+
+/**********************************************************
+部署到哪个环境 默认为branches
+tags: 源文件
+branches: 测试线文件
+trunk: 正式线文件
+执行列表
+webpack -d -w 默认压缩到branches
+webpack -boss 压缩全部
+webpack -trunk压缩到trunk 不可能-move-to同时使用
+webpack -move-path 压缩到指定文件路径不可与trunk同时使用
+***********************************************************/
+
+{
+    const TAGS = 'src'; // dev环境
+    const BRANCHES = 'dist'; // bch环境
+    const TRUNK = 'trunk'; // 输出到trunk
+    const DEFINE_OUTPUT = /^move-path:/;
+    let output = cwd.replace(TAGS, BRANCHES); // 输出路径branches
+    var SOURCEMAP = 'source-map';
+    var sp = SOURCEMAP;
+
+    webpackOptions.devtool = sp;
+    webpackOptions.output.path = output // 设置输出路径
 
 
-/** 部署到哪个环境 默认为branches S*/
-// tags: 源文件
-// branches: 测试线文件
-// trunk: 正式线文件
-// 执行列表
-// webpack -d -w 默认压缩到branches
-// webpack -boss 压缩全部
-// webpack -trunk压缩到trunk 不可能-move-to同时使用
-// webpack -move-path 压缩到指定文件路径不可与trunk同时使用
-var sls = {
-    deep: argvs.boss, // 是否压缩文件夹下所有文件（包含文件夹内的文件夹）
-    entry: {}, // 入口文件处理
-    root: path.join(__dirname),
-    template: {}, // jade模板
-    styles: {}, // 样式
-    output: cwd.replace('src', 'dist') // 输出路径branches
-};
+    if (fs.existsSync(path.join(cwd, readFileName))) {
+        var json = JSON.parse(fs.readFileSync(path.join(cwd, readFileName), 'utf-8') || {});
 
-(function() {
-    // 定义输出路径
-    // -move-path:E:\xxx\xxx\xxx
-    var TRUNK = 'trunk'; // 输出到trunk
-    var DEFINE_OUTPUT = /^move-path:/;
-    Object.keys(argvs).forEach(function(item) {
-        if (TRUNK == item) {
-            sls.output = cwd.replace('tags', TRUNK);
-        } else if (DEFINE_OUTPUT.test(item)) { // 自己定义输出路径
-            sls.output = path.join(item.replace(DEFINE_OUTPUT, ''));
+        if (json.name && json.value) {
+            var o = {
+                'BRANCHES': output,
+                'TRUNK': cwd.replace(TAGS, TRUNK),
+                '$': path.join(json.value),
+                '$$': path.join(json.value)
+            };
+            // 如果是绝对路径
+            if (path.isAbsolute(o[json.name])) {
+                webpackOptions.output.path = o[json.name]
+            }
+            if (json.name == '$$' || json.name == 'TRUNK') {
+                delete webpackOptions.devtool;
+            }
+        }
+    }
+
+}
+
+/**********************************************************
+查找入口文件
+***********************************************************/
+{
+    // 工具函数
+    const findfiles = function(ipath, deep = false, json = {}) {
+        fs.readdirSync(ipath).forEach(function(sPath) {
+            if (/^(_|webpack|grunt|gulp|package)/.test(sPath)) return;
+            var fileName = path.join(ipath, sPath);
+            if (fs.lstatSync(fileName).isDirectory() && sPath != '') {
+                if (deep && sPath !== 'node_modules') findfiles(fileName, deep, json);
+            } else {
+                var name = path.relative(cwd, fileName).replace(/\.\w+$/, ''),
+                    key = path.extname(fileName).replace(/^\./, '');
+
+                json[key] = json[key] || {};
+                json[key][name] = fileName;
+            }
+        })
+        return json;
+    };
+    const files = findfiles(cwd, true);
+    files.type = function(str) {
+        if (Object.prototype.toString.call(str) !== '[object String]') return false;
+        return this[str] || {};
+    }
+
+    webpackOptions.entry = files.type('js'); // 配制js入口
+
+    // 设置jade模板
+    Object.keys(files.type('pug')).forEach(function(page) {
+        if (page !== 'vendors') {
+            webpackOptions.plugins.unshift(new HtmlWebpackPlugin({
+                title: page,
+                inject: true,
+                filename: page + '.html',
+                template: path.join(cwd, page + '.pug')
+            }));
         }
     })
-})();
+}
 
 
-(function() {
-    // 打开压缩到的目录
-    var interval = setInterval(function() {
-        if (fs.existsSync(sls.output)) {
-            ncp.copy(sls.output); // 复制输出路径
-            open_dir(sls.output);
-            clearInterval(interval);
-            interval = null;
-        }
-    }, 100);
 
-    // 打开目录
-    function open_dir(d) {
+/**********************************************************
+打开文件压缩目录并复制路径
+***********************************************************/
+{
+    const TIME = 500;
+    const openDir = function(d) { // 打开目录
         var cmd = '';
         if (process.platform === 'darwin') {
             cmd = 'open';
@@ -83,122 +299,30 @@ var sls = {
             cmd = 'start';
         }
         childProcess.execSync(cmd + ' ' + d);
-    }
-})();
-
-// 入口处理
-(function() {
-    var jsfiles = {};
-    var jades = {};
-    var styls = {};
-    var cwd = path.join(process.cwd());
-    var REG_JADE = /\.jade$/;
-    var REG_JS = /\.js$/;
-
-    function readdir(p, deep = false) {
-        fs.readdirSync(p).forEach(function(sPath) {
-            var fileName = path.join(p, sPath);
-            if (fs.lstatSync(fileName).isDirectory() && sPath != '') {
-                if (deep) readdir(fileName, deep);
-            } else {
-                // if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath) && /\.js$/.test(sPath)) {
-                if (!/(^(_|grunt|gulp|webpack)|\.map$)/.test(sPath)) {
-                    var name = path.relative(cwd, fileName);
-                    // js
-                    if (REG_JS.test(name)) {
-                        jsfiles[name.replace(REG_JS, '')] = fileName;
-                    }
-
-                    // jade
-                    if (REG_JADE.test(name)) {
-                        jades[name.replace(REG_JADE, '')] = fileName;
-                    }
-                }
-            }
-        })
     };
-    readdir(cwd, true);
-    sls.entry = jsfiles;
-    sls.template = jades;
-})();
-console.log(sls.entry)
-module.exports = {
-    //支持数组形式，将加载数组中的所有模块，但以最后一个模块作为输出
-    entry: sls.entry,
-    output: {
-        publicPath: '../',
-        path: sls.output, // tags: 源码环境 branches: 测试环境 trunk: 正式环境
-        filename: "[name].js",
-        libraryTarget: "umd"
-    },
-    module: {
-        //加载器配置
-        loaders: [{
-                test: /\.js$/,
-                exclude: /node_modules/,
-                loader: 'babel-loader',
-                query: { presets: ['es2015'] }
-            },
-            { test: /\.jade$/, loader: 'jade?pretty=true' },
-            // { test: /\.html$/, loader: "html" },
-            //.css 文件使用 style-loader 和 css-loader 来处理
-            { test: /\.styl$/, loader: ExtractTextPlugin.extract(["css", "autoprefixer-loader?browsers=last 9 version", "stylus"]) },
-            // { test: /\.styl$/, loader: "style-loader!css-loader!stylus-loader" },
-            { test: /\.css$/, loader: ExtractTextPlugin.extract("style-loader", "css-loader") },
-            //.scss 文件使用 style-loader、css-loader 和 sass-loader 来编译处理
-            { test: /\.scss$/, loader: 'style!css!sass?sourceMap' },
-            //图片文件使用 url-loader 来处理，小于8kb的直接转为base64
-            { test: /\.(png|jpg)$/, loader: 'file-loader?name=[path][name].[ext]' },
-            // { test: /\.(png|jpg)$/, loader: 'url-loader?limit=8192&name=[path][name].[ext]' }
-        ]
-    },
-    externals: {
-        // jquery: 'jQuery',
-        zepto: '$',
-    },
-    resolve: {
-        //查找module的话从这里开始查找
-        root: sls.root,
-        //自动扩展文件后缀名，意味着我们require模块可以省略不写后缀名
-        extensions: ['', '.js', '.json', '.scss', '.styl', '.jade'],
-        //模块别名定义，方便后续直接引用别名，无须多写长长的地址
-        alias: {}
-    },
-    plugins: [
-        new webpack.optimize.UglifyJsPlugin({
-            compress: {
-                warnings: false,
-            },
-            output: {
-                comments: false,
-                ascii_only: true
-            }
-        }),
-        new ExtractTextPlugin("css/style.css")
-    ]
+    let interval = setInterval(function() {
+        const output = getOutPutPath();
+        if (fs.existsSync(output)) {
+            ncp.copy(output); // 复制输出路径
+            openDir(output);
+            clearInterval(interval);
+            interval = null;
+        }
+    }, TIME);
 }
 
-// 打包jade页面
-Object.keys(sls.template).forEach(function(page) {
-    if (page !== 'vendors') {
-        module.exports.plugins.push(new HtmlWebpackPlugin({
-            // title: 用来生成页面的 title 元素
-            // filename: 输出的 HTML 文件名，默认是 index.html, 也可以直接配置带有子目录。
-            // template: 模板文件路径，支持加载器，比如 html!./index.html
-            // inject: true | 'head' | 'body' | false  ,注入所有的资源到特定的 template 或者 templateContent 中，如果设置为 true 或者 body，所有的 javascript 资源将被放置到 body 元素的底部，'head' 将放置到 head 元素中。
-            // favicon: 添加特定的 favicon 路径到输出的 HTML 文件中。
-            // minify: {} | false , 传递 html-minifier 选项给 minify 输出
-            // hash: true | false, 如果为 true, 将添加一个唯一的 webpack 编译 hash 到所有包含的脚本和 CSS 文件，对于解除 cache 很有用。
-            // cache: true | false，如果为 true, 这是默认值，仅仅在文件修改之后才会发布文件。
-            // showErrors: true | false, 如果为 true, 这是默认值，错误信息会写入到 HTML 页面中
-            // chunks: 允许只添加某些块 (比如，仅仅 unit test 块)
-            // chunksSortMode: 允许控制块在添加到页面之前的排序方式，支持的值：'none' | 'default' | {function}-default:'auto'
-            // excludeChunks: 允许跳过某些块，(比如，跳过单元测试的块) 
-            title: 'AAAAAAAAAAAA',
-            filename: page + '.html',
-            minify: false,
-            template: page + '.jade',
-            chunks: [page]
-        }));
+
+module.exports = webpackOptions;
+// 获取输出路径
+function getOutPutPath() {
+    return module.exports.output.path;
+}
+
+// 删除自动生成的配置文件
+{
+    function unlink(filename) {
+        if (fs.existsSync(filename)) fs.unlink(filename);
     }
-})
+    unlink(path.join(cwd, readFileName));
+    unlink(path.join(cwd, 'webpack.config.js'));
+}
